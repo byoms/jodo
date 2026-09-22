@@ -29,11 +29,29 @@ The persistence to S3 must happen asynchronously using SQS, so the API request s
 
 ## Code
 
-Build command reference
+This project is given the name: "Jodopost". The solution comprises of creating 2 lambda functions -
+ receiver and processor with an API gateway (necessary component introduced to serve as the entry point)
+
+Lambda functions:
+  - Receiver: Accepts the HTTP request through an AWS API Gateway and creates a payload with all the required data that can be pushed to SQS. 
+  - Processor: Consumes messages from the same SQS queue and writes them as files to S3
+
+
+Build steps for deploying to Lambda:
 
 ```sh
-GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o ./build/receiver/bootstrap main.go
+# example: for the receiver
+cd ./app/jodopost
+go mod tidy
+GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o ./bootstrap ./receiver/main.go
+zip function.zip bootstrap
 ```
+
+Required environment variables to configured on Lambda:  
+
+  - QUEUE_URL: URL of the SQS queue used to support asynchronous processing (receiver)
+  - BUCKET_NAME: Name of S3 bucket used to store data (processor)
+
 
 ### Details
 
