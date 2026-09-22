@@ -37,7 +37,7 @@ GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o ./build/receiver/bootstra
 
 ### Details
 
-Stored at a key like: `requests/2026/09/22/POST/abc-123-def-<uuid>.json`
+Stored on S3 at a key like: `requests/2026/09/22/POST/abc-123-def-<uuid>.json`
 
 Each archived object in S3 will look like this:
 
@@ -64,11 +64,8 @@ Each archived object in S3 will look like this:
 
 #### Features
 
-Partial batch failures: The consumer uses ReportBatchItemFailures so if one message in a batch of 10 fails, only that message gets retried — not the whole batch
-
-Idempotency: SQS is at-least-once delivery, so the same message could be processed twice. The S3 key includes a UUID, so duplicate processing would create duplicate objects rather than overwrite
-
-DLQ: after 3 failed attempts, a message goes to RequestDLQ instead of retrying forever
-
-Archiving is best-effort, not blocking: `archiveRequest` failures (SQS being down, throttled, etc.) are logged but don't fail the caller's HTTP response.
+  - Partial batch failures: The consumer uses `ReportBatchItemFailures` so if one message in a batch of 10 fails, only that message gets retried — not the whole batch
+  - Idempotency: SQS is at-least-once delivery, so the same message could be processed twice. The S3 key includes a UUID, so duplicate processing would create duplicate objects rather than overwrite
+  - DLQ: after 3 failed attempts, a message goes to RequestDLQ instead of retrying forever
+  - Archiving is best-effort, not blocking: `archiveRequest` failures (SQS being down, throttled, etc.) are logged but don't fail the caller's HTTP response.
 
