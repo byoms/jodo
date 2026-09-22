@@ -26,3 +26,49 @@ The persistence to S3 must happen asynchronously using SQS, so the API request s
 
 ---
 
+
+## Code
+
+Build command reference
+
+```sh
+GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o ./build/receiver/bootstrap main.go
+```
+
+### Details
+
+Stored at a key like: `requests/2026/09/22/POST/abc-123-def-<uuid>.json`
+
+Each archived object in S3 will look like this:
+
+```json
+{
+  "request_id": "abc-123-def",
+  "timestamp": "2026-09-22T10:15:30Z",
+  "path": "/",
+  "http_method": "POST",
+  "headers": {
+    "Content-Type": "application/json",
+    "User-Agent": "curl/8.4.0",
+    "X-Forwarded-For": "203.0.113.5"
+  },
+  "query_params": {
+    "source": "web"
+  },
+  "request_body": "{\"name\": \"Alice\", \"email\": \"alice@example.com\"}",
+  "response_status": 200,
+  "response_body": "{\"message\": \"Hello, Alice! Your request was processed.\", \"success\": true}"
+}
+```
+
+
+#### Features
+
+Partial batch failures: The consumer uses ReportBatchItemFailures so if one message in a batch of 10 fails, only that message gets retried — not the whole batch
+
+Idempotency: SQS is at-least-once delivery, so the same message could be processed twice. The S3 key includes a UUID, so duplicate processing would create duplicate objects rather than overwrite
+
+DLQ: after 3 failed attempts, a message goes to RequestDLQ instead of retrying forever
+
+Archiving is best-effort, not blocking: `archiveRequest` failures (SQS being down, throttled, etc.) are logged but don't fail the caller's HTTP response.
+
