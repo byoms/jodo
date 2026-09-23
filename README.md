@@ -30,22 +30,33 @@ The persistence to S3 must happen asynchronously using SQS, so the API request s
 ## Code
 
 This project is given the name: "Jodopost". The solution comprises of creating 2 lambda functions -
- receiver and processor with an API gateway (necessary component introduced to serve as the entry point)
+ receiver and processor with an API gateway (necessary component introduced to serve as the entry point).
+ The code is under the `app/` directory and is implemented using Golang.
 
 Lambda functions:
   - Receiver: Accepts the HTTP request through an AWS API Gateway and creates a payload with all the required data that can be pushed to SQS. 
   - Processor: Consumes messages from the same SQS queue and writes them as files to S3
 
 
-Build steps for deploying to Lambda:
+#### Build 
+
+Sample steps for demonstration:  
 
 ```sh
 # example: for the receiver
 cd ./app/jodopost
 go mod tidy
 GOOS=linux GOARCH=amd64 go build -tags lambda.norpc -o ./bootstrap ./receiver/main.go
-zip function.zip bootstrap
+zip a02b502.zip bootstrap
 ```
+
+#### Deployment 
+
+The zip file name contains the git commit hash as the version identifier. They are stored on S3
+ and the S3 path is configured on Lambda. With a new version published to S3, the configuration
+ can be updated via terraform to deploy the new version
+
+#### Configuration
 
 Required environment variables to configured on Lambda:  
 
@@ -55,7 +66,7 @@ Required environment variables to configured on Lambda:
 
 ### Details
 
-Stored on S3 at a key like: `requests/2026/09/22/POST/abc-123-def-<uuid>.json`
+That data is stored on S3 at a key like: `requests/2026/09/22/POST/abc-123-def-<uuid>.json`
 
 Each archived object in S3 will look like this:
 
@@ -83,7 +94,36 @@ Each archived object in S3 will look like this:
 #### Features
 
   - Partial batch failures: The consumer uses `ReportBatchItemFailures` so if one message in a batch of 10 fails, only that message gets retried — not the whole batch
-  - Idempotency: SQS is at-least-once delivery, so the same message could be processed twice. The S3 key includes a UUID, so duplicate processing would create duplicate objects rather than overwrite
   - DLQ: after 3 failed attempts, a message goes to RequestDLQ instead of retrying forever
   - Archiving is best-effort, not blocking: `archiveRequest` failures (SQS being down, throttled, etc.) are logged but don't fail the caller's HTTP response.
+
+
+#### Future scope
+
+  - Idempotency: SQS is at-least-once delivery, so the same message could be processed twice. The S3 key includes a UUID, so duplicate processing would create duplicate objects rather than overwrite
+  - Implement CI: Build pipeline that is triggered to create Lambda build artifacts when merged to the release branch.
+
+---
+
+## Infra
+
+The infrastructure of all the essential components are created using Terraform. The code is under
+ the `infra/` directory.
+
+#### Details
+
+  - An API gateway API is created to serve as the entrypoint for the HTTP request
+  - There are 2 Lambda functions, namely: receiver and processor. 
+  - The receiver accepts the request from the API gateway and creates a payload with the required information and pushes it to an SQS queue
+  - The processor consumes messages in the queue and stores the information as a file on S3
+  - A dedicated KMS key is used for encryption required on the various components in this project
+  - CloudWatch log groups are created for additional visibility in troubleshooting
+
+#### Future scope
+
+  - Enable authentication/authorization at API gateway and TLS certificates
+  - S3 data lifecycle policy
+  - VPC networking for Lambda
+  - VPC endpoints and security groups for security and cost
+  - ARM based code builds for cost optimization
 
